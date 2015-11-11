@@ -79,7 +79,7 @@ def getData():
 	print "received coordinates: [" + lat1 + ", " + lat2 + "], [" + lng1 + ", " + lng2 + "]"
 	
 	client = pyorient.OrientDB("localhost", 2424)
-	session_id = client.connect("root", "password")
+	session_id = client.connect("root", "admin")
 	db_name = "soufun"
 	db_username = "admin"
 	db_password = "admin"
@@ -149,16 +149,16 @@ def getData():
 			grid[j].append(0)
 
 	## HEAT MAP IMPLEMENTATION
-	# for record in records:
+	for record in records:
 
-	# 	pos_x = int(remap(record.longitude, lng1, lng2, 0, numW))
-	# 	pos_y = int(remap(record.latitude, lat1, lat2, numH, 0))
+	 	pos_x = int(remap(record.longitude, lng1, lng2, 0, numW))
+	 	pos_y = int(remap(record.latitude, lat1, lat2, numH, 0))
 
-	# 	spread = 12
+	 	spread = 12
 
-	# 	for j in range(max(0, (pos_y-spread)), min(numH, (pos_y+spread))):
-	# 		for i in range(max(0, (pos_x-spread)), min(numW, (pos_x+spread))):
-	# 			grid[j][i] += 2 * math.exp((-point_distance(i,j,pos_x,pos_y)**2)/(2*(spread/2)**2))
+	 	for j in range(max(0, (pos_y-spread)), min(numH, (pos_y+spread))):
+	 		for i in range(max(0, (pos_x-spread)), min(numW, (pos_x+spread))):
+	 			grid[j][i] += 2 * math.exp((-point_distance(i,j,pos_x,pos_y)**2)/(2*(spread/2)**2))
 
 
 	## MACHINE LEARNING IMPLEMENTATION
@@ -172,18 +172,48 @@ def getData():
 
 	X = np.asarray(featureData, dtype='float')
 	y = np.asarray(targetData, dtype='float')
+        breakpoint = int(numListings * .7)
 
-	scaler = preprocessing.StandardScaler().fit(X)
-	X_scaled = scaler.transform(X)
+        print "length of dataset: " + str(numListings)
+        print "length of training set: " + str(breakpoint)
+        print "length of validation set: " + str(numListings-breakpoint)
+	
+	X_train = X[:breakpoint]
+        X_val = X[breakpoint:]
+
+        y_train = y[:breakpoint]
+        y_val = y[breakpoint:]
+	
+	scaler = preprocessing.StandardScaler().fit(X_train)
+        X_train_scaled = scaler.transform(X_train)
 
 	q.put("training model...")
 
-	C = 10000
-	e = 10
-	g = .01
+        mse_min = 10000000000000000000000
 
-	model = svm.SVR(C=C, epsilon=e, gamma=g, kernel='rbf', cache_size=2000)
-	model.fit(X_scaled, y)
+        for C in [.01, 1, 100, 10000, 1000000]:
+            for e in [.01, 1, 100, 10000, 1000000]:
+                    for g in [.01, 1, 100, 10000, 1000000]:
+        
+                        q.put("training model: C[" + str(C) + "], e[" + str(e) + "], g[" + str(g) + "]")
+        
+                        model = svm.SVR(C=C, epsilon=e, gamma=g, kernel='rbf', cache_size=2000)
+                        model.fit(X_train_scaled, y_train)
+        
+                        y_val_p = [model.predict(i) for i in X_val]
+        
+                        mse = 0
+                        for i in range(len(y_val_p)):
+                            mse += (y_val_p[i] - y_val[i]) ** 2
+                        mse /= len(y_val_p)
+        
+                        if mse < mse_min:
+                            mse_min = mse
+                            model_best = model
+                            C_best = C
+                            e_best = e
+                            g_best = g
+        q.put("best model: C[" + str(C_best) + "], e[" + str(e_best) + "], g[" + str(g_best) + "]")
 
 	for j in range(numH):
 		for i in range(numW):
@@ -193,9 +223,7 @@ def getData():
 			testData = [[lat, lng]]
 			X_test = np.asarray(testData, dtype='float')
 			X_test_scaled = scaler.transform(X_test)
-			grid[j][i] = model.predict(X_test_scaled)
-
-
+			grid[j][i] = model_best.predict(X_test_scaled)
 
 	grid = normalizeArray(grid)
 
