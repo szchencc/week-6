@@ -25,6 +25,16 @@
 		<form>
 			<!-- IMPLEMENT NEW USER INTERFACE ELEMENTS HERE -->
 			<p><input id="interpolation" type="checkbox" checked>Interpolation</p>
+			<p><input id="heatmap" type="checkbox" checked>Heat Map</p>
+			<p><span style="font-family: Arial"><strong>Spread</strong></span><input type="range" min="0" max="50" value="25" step="5" onchange="showValue(this.value)"/>
+				<span id="range">25</span>
+				<script type="text/javascript">
+					function showValue(newValue)
+					{
+						document.getElementById("range").innerHTML=newValue;
+					}
+					</script>
+			</p>
 			<p><input type="button" value="Update Data" onclick="updateData()"></p>
 			<p>Status: <em id="message"></em></p>
 		</form>
